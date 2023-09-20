@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html>
+<html>
+
+<head>
+    <title>My first Vue app</title>
+    <!-- 引入vue -->
+    <script src="scripts/vue.js"></script>
+    <!-- 引入elementCSS -->
+    <link rel="stylesheet" href="css/element.css" />
+    <!-- 引入element组件库 -->
+    <script src="scripts/element.js"></script>
+    <!-- 引入xlsx -->
+    <script type="text/javascript" src="scripts/xlsx.core.min.js"></script>
+    <script type="text/javascript" src="scripts/echarts.min.js"></script>
+    <link rel="stylesheet" href="css/index.css" />
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <span class="fileinput-button" id="btnLine">
+                <span>Select the file</span>
+                <input type="file" id="inputLine"
+                    accept="application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    @input="readExcelToJson($event)" />
+            </span>
+            <div class="fileName">{{fileName}}</div>
+            <el-form ref="form" :model="form" label-width="60px" :inline="true" size="mini" class="formInf">
+                <el-form-item label="Name：">
+                    <el-select v-model="form.name" placeholder="Please select" style="width: 100px;" @change="selectChang()">
+                        <el-option v-for="item in options" :key="item.value" :label="item.label" :value="item.value">
+                        </el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="Grades：">
+                    <span>{{form.transcript}}</span>
+                </el-form-item>
+                <el-form-item label="Ranking：">
+                    <span>{{form.rank}}</span>
+                </el-form-item>
+            </el-form>
+            <el-divider class="divLine"></el-divider>
+        </header>
+        <el-row :gutter="20" class="echartCon">
+            <el-col :span="12">
+                <el-row :gutter="20" class="echartConleft">
+                    <el-col :span="24" class="echartItem">
+                        <span class="echartTit" v-if="nameArr.length">Overall situation of the class</span>
+                        <div id="ECharts_line" class="echartDiv"></div>
+                    </el-col>
+                    <el-col :span="12" class="echartItem">
+                        <span class="echartTit" v-if="nameArr.length">Personal mastery</span>
+                        <div id="ECharts_pie" class="echartDiv"></div>
+                    </el-col>
+                    <el-col :span="12">
+                        <div id="ECharts_funnel" class="echartDiv"></div>
+                    </el-col>
+                    <el-col :span="24" class="echartItem elProCon">
+                        <span class="echartTit" v-if="nameArr.length">Wrong question analysis</span>
+                        <div class="funnelCon">
+                            <el-row :gutter="20" class="echartCon">
+                                <el-col :span="12" v-for="(item,index) in pointsArr" class="pointItem">
+                                    <span>{{Number(index) +1}}、{{item}}</span>
+                                    <el-progress :percentage=pointDataArr[index] color=#5cb87a></el-progress>
+                                    <div class="reason"><span>Failure</span><span>Not remembered</span><span>Did not understand</span><span>Other</span>
+                                    </div>
+                                </el-col>
+                            </el-row>
+                        </div>
+                    </el-col>
+                </el-row>
+            </el-col>
+            <el-col :span="12">
+                <el-row :gutter="20" class="echartConRight">
+                    <el-col :span="24" class="echartItem">
+                        <span class="echartTit" v-if="nameArr.length">Knowledge Alert</span>
+                        <div id="ECharts_relation" class="echartDiv"></div>
+                    </el-col>
+                    <el-col :span="12" class="echartItem">
+                        <span class="echartTit" v-if="nameArr.length">Self-examination and Reflection</span>
+                        <div id="ECharts_radar" class="echartDiv"></div>
+                    </el-col>
+                    <el-col :span="12" class="reflectCko" v-if="nameArr.length">
+                        <div class="reflectCon">
+                            <el-form ref="reflectForm" :model="reflectForm" label-width="90px" size="mini"
+                                label-position="left" class="reflectConForm">
+                                <div>Reflection and Planning</div>
+                                <el-form-item label="Not done">
+                                    <el-input v-model="reflectForm.notDone"></el-input>
+                                </el-form-item>
+                                <el-form-item label="Good job：">
+                                    <el-input v-model="reflectForm.done"></el-input>
+                                </el-form-item>
+                                <el-form-item label="Improvement Plan：">
+                                    <el-input v-model="reflectForm.plan"></el-input>
+                                </el-form-item>
+                            </el-form>
+                        </div>
+                    </el-col>
+                    <el-col :span="24" class="summaryCon echartItem" v-if="nameArr.length">
+                        <span class="echartTit sumTitle" v-if="nameArr.length">Summary and Evaluation</span>
+                        <el-form ref="reflectForm" label-width="90px" size="medium" label-position="left"
+                            class="sumForm">
+                            <el-form-item label="Exam Summary：">
+                                <div>{{summary}}</div>
+                            </el-form-item>
+                            <el-form-item label="Teacher Review：">
+                                <div>{{comment}}</div>
+                            </el-form-item>
+                        </el-form>
+                    </el-col>
+                </el-row>
+
+            </el-col>
+        </el-row>
+
+
+
+
+    </div>
+    <script>
+        var app = new Vue({
+            el: '#app',
+            data: {
+                fileName: 'Please select the file',
+                options: [],
+                form: {
+                    name: '-',
+                    transcript: '-',
+                    rank: '-',
+                },
+                studentInf: [],
+                colNameArr: [],
+                //姓名合集
+                nameArr: [],
+                // 成绩合集
+                transcriptArr: [],
+                pointsArr: [],
+                pointDataArr: [],
+                reflectForm: {
+                    notDone: '',
+                    done: '',
+                    plan: '',
+                },
+                summary: '',
+                comment: ''
+
+
+            },
+            methods: {
+                selectChang(val) {
+                    var index = app.nameArr.indexOf(app.form.name)
+                    app.form.transcript = app.transcriptArr[index];
+                    app.form.rank = app.studentInf[index].rank;
+                    app.dataToPieChart(app.studentInf[index]);
+                    app.dataToFunnelChart(app.studentInf[index]);
+                    app.dataToFunnelChart(app.studentInf[index]);
+                    app.pointDataArr = app.studentInf[index].planData;
+                    app.dataToRadarChart(app.studentInf[index]);
+                    app.summary = app.studentInf[index].summary;
+                    app.comment = app.studentInf[index].comment;
+
+                },
+                //上传文件转换成json格式
+                readExcelToJson(event) {
+                    app.options = [];
+                    app.studentInf = [];
+                    app.colNameArr = [];
+                    app.nameArr = [];
+                    app.transcriptArr = [];
+                    app.pointsArr = [];
+                    app.pointDataArr = [];
+
+                    let files = event.target.files;
+                    // 如果有文件
+                    if (files.length) {
+                        // 初始化一个FileReader实例
+                        let reader = new FileReader();
+                        let file = files[0];
+                        // 看下文件是不是xls或者xlsx的
+                        let fullName = file.name; // 全名
+                        let filename = fullName.substring(0, fullName.lastIndexOf('.')); // 文件名
+                        app.fileName = filename;
+                        let fixName = fullName.substring(fullName.lastIndexOf('.'), fullName.length); // 后缀名
+                        // 处理excel表格
+                        if (fixName == '.xls' || fixName == '.xlsx') {
+                            reader.onload = function (ev) {
+                                let data = ev.target.result;
+                                // 获取到excel
+                                let excel = XLSX.read(data, { type: 'binary' });
+                                // 获取第一个标签页名字
+                                let sheetName = excel.SheetNames[0];
+                                // 根据第一个标签页名，获取第一个标签页的内容
+                                let sheet = excel.Sheets[sheetName];
+                                // 转换为JSON
+                                let sheetJson = XLSX.utils.sheet_to_json(sheet);
+                                app.colNameArr = app.getColName(sheetJson);
+                                app.getStudentInf(sheetJson);
+                                app.dataToLineChart();
+                                app.form.name = app.nameArr[0];
+                                app.form.transcript = app.transcriptArr[0];
+                                app.form.rank = app.studentInf[0].rank;
+                                app.dataToPieChart(app.studentInf[0]);
+                                app.dataToFunnelChart(app.studentInf[0]);
+                                app.dataToFunnelChart(app.studentInf[0]);
+                                app.pointDataArr = app.studentInf[0].planData;
+                                app.dataToRadarChart(app.studentInf[0]);
+                                app.summary = app.studentInf[0].summary;
+                                app.comment = app.studentInf[0].comment;
+                                app.dataToTelationChart();
+
+
+
+
+                            };
+                        } else {
+                            alert('Go away, excel support only');
+                        }
+                        reader.readAsBinaryString(file);
+                    }
+                },
+
+                //处理学生数据
+                getStudentInf(data) {
+                    data.forEach(element => {
+                        var item = {
+                            name: '',
+                            rank: '',
+                            preData: [],
+                            targetData: '',
+                            planData: [],
+                            radar: [],
+                            summary: '',
+                            comment: ''
+                        }
+                        app.options.push({
+                            value: element.Name,
+                            label: element.Name
+                        })
+                        item.name = element.Name;
+                        item.rank = element.Ranking;
+                        item.preData.push({
+                            name: "Mastered knowledge",
+                            value: element.POMK
+                        }, {
+                            name: "Uncontrolled knowledge",
+                            value: element.POUK
+                        });
+                        item.targetData = element.CL;
+                        item.radar.push(element.DNU, element.Failure, element.NR, element.Other);
+                        item.summary = element.ES;
+                        item.comment = element.TR;
+                        app.colNameArr.forEach(colItem => {
+                            item.planData.push(Number(element[colItem] * 100))
+                        })
+                        app.nameArr.push(element.Name)
+                        app.transcriptArr.push(element.Grades)
+                        app.studentInf.push(item);
+
+                    });
+                },
+                getColName(sheetJson) {
+                    // 遍历json的第一行，获取key
+                    let keys = [];
+                    for (let key in sheetJson[0]) {
+                        if (key.indexOf('Knowledge Points：') != -1) {
+                            keys.push(key)
+                            app.pointsArr.push(key.replace('Knowledge Points：', ''))
+                        }
+                    }
+                    return keys;
+                },
+                //线图数据
+                dataToLineChart() {
+                    // 发现每次执行init的时候会在给的div标签中加入一个_echarts_instance_的属性，后面再init的话就不行了
+                    // 所以每次先看下有没有这个属性，删掉他
+                    document.getElementById('ECharts_line').innerHTML = "";
+                    document.getElementById('ECharts_line').removeAttribute('_echarts_instance_');
+                    // 基于准备好的dom，初始化echarts实例
+                    var myChart = echarts.init(document.getElementById('ECharts_line'));
+                    // 指定图表的配置项和数据
+                    var option = {
+                        xAxis: {
+                            type: 'category',
+                            data: app.nameArr
+                        },
+                        yAxis: {
+                            type: 'value'
+                        },
+                        tooltip: {
+                            trigger: 'axis'
+                        },
+                        series: [
+                            {
+                                data: app.transcriptArr,
+                                type: 'line',
+                                smooth: true
+                            }
+                        ]
+                    };
+                    // 使用刚指定的配置项和数据显示图表。
+                    myChart.setOption(option);
+                },
+                //饼图数据
+                dataToPieChart(datas) {
+                    document.getElementById('ECharts_pie').innerHTML = "";
+                    document.getElementById('ECharts_pie').removeAttribute('_echarts_instance_');
+                    // 基于准备好的dom，初始化echarts实例
+                    let myChart = echarts.init(document.getElementById('ECharts_pie'));
+                    // 指定图表的配置项和数据
+                    let option = {
+                        color: ['#216D49', '#BC0001'],
+                        tooltip: {
+                            trigger: 'item',
+                            formatter: "{b} : {d}%"
+                        },
+                        series: [{
+                            name: '知识掌握情况',
+                            type: 'pie',
+                            radius: '50%',
+                            center: ['55%', '50%'],
+                            data: datas.preData,
+                            emphasis: {
+                                itemStyle: {
+                                    shadowBlur: 10,
+                                    shadowOffsetX: 0,
+                                    shadowColor: 'rgba(0, 0, 0, 0.5)'
+                                }
+                            }
+                        }],
+                        label: {
+                            formatter: '{b}\n{d}%',
+                            minMargin: 5,
+                            edgeDistance: 10,
+                            lineHeight: 15,
+                            rich: {
+                                time: {
+                                    fontSize: 10,
+                                    color: '#999'
+                                }
+                            }
+                        },
+                    };
+                    // 使用刚指定的配置项和数据显示图表。
+                    myChart.setOption(option);
+                },
+                //漏斗图
+                dataToFunnelChart(datas) {
+                    document.getElementById('ECharts_funnel').innerHTML = "";
+                    document.getElementById('ECharts_funnel').removeAttribute('_echarts_instance_');
+                    // 基于准备好的dom，初始化echarts实例
+                    let myChart = echarts.init(document.getElementById('ECharts_funnel'));
+                    let color = [];
+                    let data = [
+                        { value: 20, name: 'Your Goals' },
+                        { value: 40, name: 'Level 4' },
+                        { value: 60, name: 'Level 3' },
+                        { value: 80, name: 'Level 2' },
+                        { value: 100, name: 'Level 1' }
+                    ];
+                    if (datas.targetData == '1') {
+                        color = ['#999999', '#999999', '#999999', '#999999', '#BC0001'];
+                        data[4].name = 'Current Location';
+                    } else if (datas.targetData == '2') {
+                        color = ['#999999', '#999999', '#999999', '#BC0001', '#BC0001']
+                        data[3].name = 'Current Location';
+                    } else if (datas.targetData == '3') {
+                        color = ['#999999', '#999999', '#BC0001', '#BC0001', '#BC0001']
+                        data[2].name = 'Current Location';
+                    } else if (datas.targetData == '4') {
+                        color = ['#999999', '#BC0001', '#BC0001', '#BC0001', '#BC0001']
+                        data[1].name = 'Current Location';
+                    } else if (datas.targetData == '5') {
+                        color = ['#BC0001', '#BC0001', '#BC0001', '#BC0001', '#BC0001']
+                        data[0].name = 'Current Location';
+                    }
+                    // 指定图表的配置项和数据
+                    let option = {
+                        color: color,
+                        title: {
+                            text: 'Goal Achievement',
+                            x: 'center',
+                            y: 'bottom'
+                        },
+                        series: [
+                            {
+                                name: 'Pyramid',
+                                type: 'funnel',
+                                width: '50%',
+                                height: '50%',
+                                sort: 'ascending',
+                                data: data,
+                                left: '20%',
+                                top: '25%',
+                                radius: '50%',
+                            },
+                        ]
+                    };
+                    // 使用刚指定的配置项和数据显示图表。
+                    myChart.setOption(option);
+                },
+                //雷达图
+                dataToRadarChart(datas) {
+                    document.getElementById('ECharts_radar').innerHTML = "";
+                    document.getElementById('ECharts_radar').removeAttribute('_echarts_instance_');
+                    var myChart = echarts.init(document.getElementById('ECharts_radar'));
+                    // 指定图表的配置项和数据
+                    var option = {
+                        color: ['#67F9D8', '#FFE434', '#56A3F1', '#FF917C'],
+                        tooltip: {},
+                        radar: {
+                            name: {
+                                textStyle: {
+                                    color: '#fff',
+                                    backgroundColor: '#999',
+                                    borderRadius: 3,
+                                    padding: [3, 5]
+                                }
+                            },
+                            indicator: [
+                                { name: 'Did not understand', max: 10 },
+                                { name: 'Failure', max: 10 },
+                                { name: 'Not remembered', max: 10 },
+                                { name: 'Other', max: 10 },
+                            ],
+                            center: ['50%', '50%'],
+                            radius: '50%',
+                        },
+                        series: [{
+                            type: 'radar',
+                            data: [
+                                {
+                                    value: datas.radar,
+                                    name: 'Question'
+                                }
+                            ]
+                        }]
+                    };
+
+                    // 使用刚指定的配置项和数据显示图表。
+                    myChart.setOption(option);
+                },
+                //关系图
+                dataToTelationChart() {
+                    document.getElementById('ECharts_relation').innerHTML = "";
+                    document.getElementById('ECharts_relation').removeAttribute('_echarts_instance_');
+                    var myChart = echarts.init(document.getElementById('ECharts_relation'));
+                    // 指定图表的配置项和数据
+                    var data2 = {
+                        name: 'Cellular understanding',
+                        value:2,
+                        children: [
+                            {
+                                name: 'Plant cells',
+                                value:3,
+                                lineStyle:{
+                                    color:"#00ff00"
+                                },
+                                children: [
+                                    {
+                                        lineStyle:{
+                                            color:"#ffff00"
+                                        },name: 'cell wall'},
+                                    { lineStyle:{
+                                            color:"#ffff00"
+                                        },name: 'cytoplasm'},
+                                    { lineStyle:{
+                                            color:"#00ff00"
+                                        },name: 'Cytosol'}
+                                ]
+                            },
+                            {
+                                name: 'Animal cells',
+                                lineStyle:{
+                                    color:"#ffff00"
+                                },
+                                children: [ 
+                                    {
+                                        lineStyle:{
+                                            color:"#00ff00"
+                                        },name: 'cytoplasm'},
+                                    { lineStyle:{
+                                            color:"#ffff00"
+                                        },name: 'Cytosol'}
+                                ]
+                            },
+                            {
+                                lineStyle: { color: "#ff0000" },
+                                name: 'Other Cells',
+                                children: [ 
+                                    { lineStyle:{
+                                            color:"#ff0000"
+                                        },name: 'cytoplasm'},
+                                    {  lineStyle:{
+                                            color:"#ffff00"
+                                        },name: 'Cytosol'
+                                       }
+                                ]
+                            },
+                        ],
+                        itemStyle: {
+                            normal:{
+                                color:function (params){
+                                    return params.data.color;
+                                }
+                            }
+                        }
+                    }
+                    function child(data2){//递归循环节点
+                        $.each(data2,function(i,obj){
+                            changeColor(obj);//根据状态设置不同的颜色
+                            if(obj.children!=null && obj.children.length!=0){
+                                child(obj.children);//递归循环
+                            }
+                        })
+
+                    };
+                    function changeColor(obj){//设置节点颜色
+                        if(obj.status==1){
+                            obj.itemStyle=redColer;
+                        }
+                        if(obj.status==2){
+                            obj.itemStyle=blueColer;
+                        }
+                        if(obj.status==3){
+                            obj.itemStyle=greenColer;
+                        }
+                    };
+                    // 指定图表的配置项和数据
+                    var option = {
+                        series: [
+                            {
+                                type: 'tree',
+                                name: 'tree2',
+                                data: [data2],
+                                top: '20%',
+                                left: '20%',
+                                bottom: '22%',
+                                right: '20%',
+
+                                label: {
+                                    position: 'left',
+                                    verticalAlign: 'middle',
+                                    align: 'right',
+                                    size:10
+                                },
+                                leaves: {
+                                    label: {
+                                        position: 'right',
+                                        verticalAlign: 'middle',
+                                        align: 'left',
+
+                                    }
+                                },
+                            }
+                        ]
+                    };
+                    // 使用刚指定的配置项和数据显示图表。
+                    myChart.setOption(option);
+                },
+            },
+        });
+    </script>
+</body>
+
+</html>
